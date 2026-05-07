@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.pyd
+*.pyo
+*.so
+.Python
+.pytest_cache/
+pytest-cache-files-*/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+htmlcov/
+.coverage
+.coverage.*
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Conda
+.conda/
+.miniconda3/
+conda-meta/
+
+# Runtime data and logs
+db.sqlite3
+media/
+staticfiles/
+output/
+.playwright-cli/
+*.log
+ths_today_trades.json
+celerybeat-schedule*
+tmp.png
+_external/
+
+# Node / frontend
+node_modules/
+dist/
+build/
+frontend/*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
+
+# IDE / OS
+.idea/
+.vscode/
+Thumbs.db
+Desktop.ini
+codex-backup-*/
+
+# Local env files
+.env
+.env.*
+!.env.example

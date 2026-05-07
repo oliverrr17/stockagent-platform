@@ -1,0 +1,24 @@
+name: stock-trading-analysis
+channels:
+  - conda-forge
+dependencies:
+  - python=3.13.12
+  - pip
+  - pip:
+      - Django==4.2.30
+      - djangorestframework==3.17.1
+      - djangorestframework-simplejwt==5.5.1
+      - psycopg[binary]==3.3.3
+      - celery==5.6.3
+      - redis==5.3.1
+      - python-dotenv==1.2.1
+      - pytest==8.4.2
+      - pytest-django==4.12.0
+      - hypothesis==6.152.1
+      - pandas==2.3.3
+      - requests==2.32.5
+      - tushare==1.4.29
+      - akshare==1.18.56
+      - easytrader==0.23.7
+      - pywin32==311
+      - beautifulsoup4==4.14.3

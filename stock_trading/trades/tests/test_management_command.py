@@ -76,3 +76,23 @@ def test_management_command_writes_utf8_json_file(tmp_path, capsys):
     assert "Wrote normalized THS payload" in captured.out
     payload = json.loads(Path(output_file).read_text(encoding="utf-8"))
     assert payload[0]["stock_name"] == "禾望电气"
+
+
+@pytest.mark.django_db
+def test_management_command_supports_macos_backend_without_windows_paths(monkeypatch, capsys):
+    class FakeMacConnector(FakeConnector):
+        def test_connection(self):
+            return True
+
+    monkeypatch.setenv("THS_BACKEND", "macos_ths_local")
+
+    with patch("trades.management.commands.fetch_ths_trades_now.THSConnector", FakeMacConnector):
+        call_command(
+            "fetch_ths_trades_now",
+            dry_run=True,
+            json=True,
+        )
+
+    captured = capsys.readouterr()
+    assert '"stock_code": "603063"' in captured.out
+    assert "dry-run only" in captured.out

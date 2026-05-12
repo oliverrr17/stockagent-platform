@@ -15,6 +15,7 @@ from trades.services.trade_recorder import TradeRecorder
 
 
 logger = logging.getLogger(__name__)
+MACOS_THS_BACKEND = "macos_ths_local"
 
 
 def run_ths_ingestion() -> int:
@@ -23,20 +24,25 @@ def run_ths_ingestion() -> int:
         logger.info("Skipping THS trade fetch on non-trading day %s.", today)
         return 0
 
+    backend = os.getenv("THS_BACKEND", "").strip()
     exe_path = os.getenv("THS_EXE_PATH", "").strip()
     bridge_python = os.getenv("THS_BRIDGE_PYTHON", "").strip()
-    if not exe_path and not bridge_python:
+    if backend != MACOS_THS_BACKEND and not exe_path and not bridge_python:
         logger.warning("THS_EXE_PATH or THS_BRIDGE_PYTHON must be configured; skipping THS trade fetch.")
         return 0
 
     connector = THSConnector(
         {
+            "backend": backend or None,
             "exe_path": exe_path or None,
             "client_type": os.getenv("THS_CLIENT_TYPE", "ths"),
             "bridge_python": bridge_python or None,
             "window_title_keyword": os.getenv("THS_WINDOW_TITLE_KEYWORD", "股票交易系统"),
         }
     )
+    if not connector.test_connection():
+        logger.warning("THS connector is not available for backend %s; skipping THS trade fetch.", connector.backend)
+        return 0
     records = connector.fetch_trade_records(today, today)
     recorder = TradeRecorder()
     created_count = 0

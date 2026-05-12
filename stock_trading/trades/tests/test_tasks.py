@@ -166,6 +166,50 @@ def test_run_ths_ingestion_skips_non_trading_day(monkeypatch):
 
 
 @pytest.mark.django_db
+def test_run_ths_ingestion_uses_macos_backend_without_windows_paths(monkeypatch):
+    class FakeMacConnector:
+        def __init__(self, config):
+            self.config = config
+            self.backend = "macos_ths_local"
+
+        def test_connection(self):
+            return True
+
+        def fetch_trade_records(self, start_date, end_date):
+            return [
+                {
+                    "stock_code": "603063",
+                    "stock_name": "禾望电气",
+                    "market": TradeRecord.Market.A_STOCK,
+                    "direction": TradeRecord.Direction.BUY,
+                    "price": Decimal("41.43"),
+                    "quantity": 100,
+                    "trade_time": timezone.make_aware(
+                        datetime.combine(timezone.localdate(), datetime.min.time()),
+                        timezone.get_current_timezone(),
+                    ),
+                    "source": TradeRecord.Source.THS,
+                    "commission": Decimal("0"),
+                    "stamp_duty": Decimal("0"),
+                    "other_fees": Decimal("0"),
+                }
+            ]
+
+    monkeypatch.setenv("THS_BACKEND", "macos_ths_local")
+    monkeypatch.delenv("THS_EXE_PATH", raising=False)
+    monkeypatch.delenv("THS_BRIDGE_PYTHON", raising=False)
+
+    with (
+        patch("trades.tasks.is_cn_equity_trading_day", return_value=True),
+        patch("trades.tasks.THSConnector", FakeMacConnector),
+    ):
+        created_count = run_ths_ingestion()
+
+    assert created_count == 1
+    assert TradeRecord.objects.filter(stock_code="603063", source=TradeRecord.Source.THS).count() == 1
+
+
+@pytest.mark.django_db
 def test_run_hsbc_email_ingestion_skips_non_trading_day(monkeypatch):
     monkeypatch.setenv("IMAP_HOST", "imap.example.com")
     monkeypatch.setenv("IMAP_PORT", "993")

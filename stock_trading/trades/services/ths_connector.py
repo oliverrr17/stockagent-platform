@@ -4,6 +4,8 @@ from datetime import date, datetime
 from decimal import Decimal
 import json
 import logging
+import os
+import platform
 from pathlib import Path
 import tempfile
 import subprocess
@@ -13,6 +15,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from trades.models import TradeRecord
+from trades.services.ths_macos_local import THSMacosLocalBackend
 
 
 logger = logging.getLogger(__name__)
@@ -38,6 +41,9 @@ except ImportError:  # pragma: no cover - optional dependency for runtime only
 
 
 class THSConnector:
+    BACKEND_WINDOWS_EASYTRADER = "windows_easytrader"
+    BACKEND_MACOS_LOCAL = "macos_ths_local"
+
     def __init__(self, config: dict | None = None):
         self.config = config or {}
         self.exe_path = self.config.get("exe_path")
@@ -54,11 +60,24 @@ class THSConnector:
             "window_title_keyword", "\u80a1\u7968\u4ea4\u6613\u7cfb\u7edf"
         )
         self.bridge_runner = self.config.get("bridge_runner")
+        self.backend = self._resolve_backend()
+        self.macos_backend = THSMacosLocalBackend(
+            self.config,
+            trade_normalizer=self._normalize_trade,
+            position_normalizer=self._normalize_position,
+        )
 
     def connect(self) -> bool:
         tester = self.config.get("tester")
         if callable(tester):
             return bool(tester())
+
+        if self.backend == self.BACKEND_MACOS_LOCAL:
+            reason = self.macos_backend.unavailable_reason()
+            if reason is not None:
+                logger.error("THS macOS local backend is unavailable: %s", reason)
+                return False
+            return True
 
         if self.bridge_python:
             try:
@@ -115,6 +134,8 @@ class THSConnector:
         return []
 
     def fetch_positions(self) -> list[dict]:
+        if self.backend == self.BACKEND_MACOS_LOCAL:
+            return self.macos_backend.fetch_positions()
         if self.bridge_python:
             result = self._invoke_bridge("positions")
             return [self._normalize_position(item) for item in list(result or [])]
@@ -131,6 +152,8 @@ class THSConnector:
         return list(getattr(self.user, "balance", []) or [])
 
     def test_connection(self) -> bool:
+        if self.backend == self.BACKEND_MACOS_LOCAL:
+            return self.macos_backend.test_connection()
         return self.connect()
 
     def _build_user(self):
@@ -141,6 +164,8 @@ class THSConnector:
         return easytrader.use(self.client_type)
 
     def _read_today_trades(self) -> list[dict]:
+        if self.backend == self.BACKEND_MACOS_LOCAL:
+            return self.macos_backend.fetch_today_trades()
         if self.bridge_python:
             result = self._invoke_bridge("today_trades")
             return list(result or [])
@@ -217,25 +242,43 @@ class THSConnector:
 
     def _normalize_trade(self, trade: dict) -> dict:
         stock_code = self._pick(trade, "stock_code", STOCK_CODE_CN)
-        stock_name = self._pick(trade, "stock_name", STOCK_NAME_CN)
-        direction_raw = self._pick(
-            trade,
-            "entrust_bs",
-            DIRECTION_CN,
-            "\u4e70\u5356\u65b9\u5411",
-            DIRECTION_ALT_CN,
-            "operation",
-        )
-        price_raw = self._pick(
-            trade,
-            "business_price",
-            "business_avg_price",
-            PRICE_CN,
-            PRICE_AVG_CN,
-            "price",
-        )
-        quantity_raw = self._pick(trade, "business_amount", QUANTITY_CN, "\u6210\u4ea4\u6570", "amount")
-        trade_time_raw = self._pick(trade, "business_time", TRADE_TIME_CN, "trade_time")
+        try:
+            stock_name = self._pick(trade, "stock_name", STOCK_NAME_CN)
+        except ValueError:
+            stock_name = str(stock_code).strip().upper()
+        try:
+            direction_raw = self._pick(
+                trade,
+                "entrust_bs",
+                DIRECTION_CN,
+                "\u4e70\u5356\u65b9\u5411",
+                DIRECTION_ALT_CN,
+                "操作",
+                "operation",
+            )
+        except ValueError:
+            direction_raw = self._infer_direction_from_values(trade)
+        try:
+            price_raw = self._pick(
+                trade,
+                "business_price",
+                "business_avg_price",
+                PRICE_CN,
+                PRICE_AVG_CN,
+                "\u6210\u4ea4\u5747\u4ef7",
+                "成交均价",
+                "price",
+            )
+        except ValueError:
+            price_raw = self._infer_price_field(trade)
+        try:
+            quantity_raw = self._pick(trade, "business_amount", QUANTITY_CN, "\u6210\u4ea4\u6570", "成交数量", "amount")
+        except ValueError:
+            quantity_raw = self._infer_numeric_field(trade)
+        try:
+            trade_time_raw = self._pick(trade, "business_time", TRADE_TIME_CN, "成交时间", "trade_time")
+        except ValueError:
+            trade_time_raw = self._infer_time_field(trade)
 
         quantity_value = Decimal(str(quantity_raw).replace(",", ""))
         return {
@@ -287,8 +330,15 @@ class THSConnector:
         }
 
     def _pick(self, trade: dict, *keys):
+        normalized_mapping = {
+            str(key).strip(): value
+            for key, value in trade.items()
+            if value not in (None, "")
+        }
         for key in keys:
             value = trade.get(key)
+            if value in (None, ""):
+                value = normalized_mapping.get(str(key).strip())
             if value not in (None, ""):
                 return value
         raise ValueError(f"Missing expected THS field from trade row. Keys tried: {keys}")
@@ -300,6 +350,36 @@ class THSConnector:
         if "\u5356" in text or "\u6cbd" in text or "sell" in text:
             return TradeRecord.Direction.SELL
         raise ValueError(f"Unsupported THS direction value: {value}")
+
+    def _infer_direction_from_values(self, trade: dict):
+        for value in trade.values():
+            text = str(value).strip().lower()
+            if "\u4e70" in text or "buy" in text:
+                return value
+            if "\u5356" in text or "\u6cbd" in text or "sell" in text:
+                return value
+        raise ValueError("Unable to infer THS direction from row values.")
+
+    def _infer_numeric_field(self, trade: dict):
+        for key, value in trade.items():
+            key_text = str(key)
+            if any(token in key_text for token in ("数量", "股数", "amount", "quantity")):
+                return value
+        raise ValueError("Unable to infer THS quantity field from row values.")
+
+    def _infer_time_field(self, trade: dict):
+        for key, value in trade.items():
+            key_text = str(key)
+            if any(token in key_text for token in ("时间", "日期", "time", "date")):
+                return value
+        raise ValueError("Unable to infer THS trade time field from row values.")
+
+    def _infer_price_field(self, trade: dict):
+        for key, value in trade.items():
+            key_text = str(key)
+            if any(token in key_text for token in ("价格", "均价", "price")):
+                return value
+        raise ValueError("Unable to infer THS price field from row values.")
 
     def _normalize_trade_time(self, value):
         if isinstance(value, datetime):
@@ -343,3 +423,15 @@ class THSConnector:
         if len(text) <= 8 and ":" in text:
             return self.trade_date
         return datetime.fromisoformat(text.replace("/", "-")).date()
+
+    def _resolve_backend(self) -> str:
+        configured = str(
+            self.config.get("backend") or os.getenv("THS_BACKEND", "")
+        ).strip()
+        if configured:
+            return configured
+        if self.exe_path or self.bridge_python or self.bridge_runner or self.user is not None or callable(self.client_factory):
+            return self.BACKEND_WINDOWS_EASYTRADER
+        if platform.system() == "Darwin":
+            return self.BACKEND_MACOS_LOCAL
+        return self.BACKEND_WINDOWS_EASYTRADER

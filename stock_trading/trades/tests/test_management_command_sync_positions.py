@@ -49,3 +49,19 @@ def test_sync_ths_positions_command_persists_snapshot(capsys):
     position = Position.objects.get(stock_code="603063")
     assert position.quantity == 100
     assert position.market == TradeRecord.Market.A_STOCK
+
+
+@pytest.mark.django_db
+def test_sync_ths_positions_command_supports_macos_backend_without_windows_paths(monkeypatch, capsys):
+    class FakeMacConnector(FakeTHSConnector):
+        def test_connection(self):
+            return True
+
+    monkeypatch.setenv("THS_BACKEND", "macos_ths_local")
+
+    with patch("trades.management.commands.sync_ths_positions_now.THSConnector", FakeMacConnector):
+        call_command("sync_ths_positions_now", dry_run=True, json=True)
+
+    captured = capsys.readouterr()
+    assert '"stock_code": "603063"' in captured.out
+    assert "dry-run only" in captured.out

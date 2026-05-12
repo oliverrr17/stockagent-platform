@@ -11,6 +11,8 @@ from django.utils import timezone
 from trades.services.ths_connector import THSConnector
 from trades.services.trade_recorder import TradeRecorder
 
+MACOS_THS_BACKEND = "macos_ths_local"
+
 
 class Command(BaseCommand):
     help = "Fetch today's THS trades and optionally persist them into TradeRecord."
@@ -51,6 +53,7 @@ class Command(BaseCommand):
         if hasattr(sys.stdout, "reconfigure"):
             sys.stdout.reconfigure(encoding="utf-8")
 
+        backend = os.getenv("THS_BACKEND", "").strip()
         exe_path = options["exe_path"].strip() or os.getenv("THS_EXE_PATH", "").strip()
         bridge_python = options["bridge_python"].strip() or os.getenv("THS_BRIDGE_PYTHON", "").strip()
         window_title_keyword = (
@@ -58,11 +61,12 @@ class Command(BaseCommand):
             or os.getenv("THS_WINDOW_TITLE_KEYWORD", "股票交易系统")
         )
 
-        if not exe_path and not bridge_python:
+        if backend != MACOS_THS_BACKEND and not exe_path and not bridge_python:
             raise CommandError("THS_EXE_PATH or THS_BRIDGE_PYTHON must be configured.")
 
         connector = THSConnector(
             {
+                "backend": backend or None,
                 "exe_path": exe_path or None,
                 "client_type": os.getenv("THS_CLIENT_TYPE", "ths"),
                 "bridge_python": bridge_python or None,
@@ -70,6 +74,9 @@ class Command(BaseCommand):
                 "trade_date": timezone.localdate(),
             }
         )
+        test_connection = getattr(connector, "test_connection", None)
+        if callable(test_connection) and not test_connection():
+            raise CommandError(f"THS backend {connector.backend} is not available.")
 
         trades = connector.fetch_today_trades()
         serialized_trades = [self._serialize_trade(trade) for trade in trades]

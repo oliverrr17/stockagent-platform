@@ -14,6 +14,8 @@ ths_hour = int(os.getenv("THS_FETCH_HOUR", "16"))
 ths_minute = int(os.getenv("THS_FETCH_MINUTE", "10"))
 hsbc_hour = int(os.getenv("HSBC_FETCH_HOUR", "18"))
 hsbc_minute = int(os.getenv("HSBC_FETCH_MINUTE", "30"))
+futu_hour = int(os.getenv("FUTU_FETCH_HOUR", "18"))
+futu_minute = int(os.getenv("FUTU_FETCH_MINUTE", "35"))
 news_hours = os.getenv("NEWS_FETCH_HOURS", "8,9,10,11,12,13,14,15,16,17,18,19,20,21,22")
 news_minute = int(os.getenv("NEWS_FETCH_MINUTE", "0"))
 news_digest_hour = int(os.getenv("NEWS_DIGEST_HOUR", "18"))
@@ -29,6 +31,10 @@ app.conf.beat_schedule = {
     "fetch-hsbc-email-trades-daily": {
         "task": "trades.tasks.fetch_hsbc_email_trades",
         "schedule": crontab(hour=hsbc_hour, minute=hsbc_minute, day_of_week="mon-fri"),
+    },
+    "fetch-futu-trades-daily": {
+        "task": "trades.tasks.fetch_futu_trades",
+        "schedule": crontab(hour=futu_hour, minute=futu_minute, day_of_week="mon-fri"),
     },
     "crawl-portfolio-news-daily": {
         "task": "news.tasks.crawl_portfolio_news",

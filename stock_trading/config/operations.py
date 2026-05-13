@@ -7,7 +7,7 @@ from news.tasks import crawl_portfolio_news, push_news_digest, push_notification
 from portfolio.services.portfolio_manager import PortfolioManager
 from trades.models import TradeRecord
 from trades.services.ths_connector import THSConnector
-from trades.tasks import run_hsbc_email_ingestion, run_ths_ingestion
+from trades.tasks import run_futu_ingestion, run_hsbc_email_ingestion, run_ths_ingestion
 
 
 def execute_ths_ingestion() -> dict:
@@ -18,7 +18,11 @@ def execute_hsbc_ingestion() -> dict:
     return {"created_count": int(run_hsbc_email_ingestion())}
 
 
-def execute_daily_ingestion(skip_ths: bool = False, skip_hsbc: bool = False) -> dict:
+def execute_futu_ingestion() -> dict:
+    return {"created_count": int(run_futu_ingestion())}
+
+
+def execute_daily_ingestion(skip_ths: bool = False, skip_hsbc: bool = False, skip_futu: bool = False) -> dict:
     summary: dict[str, int | str] = {}
 
     if not skip_ths:
@@ -32,6 +36,12 @@ def execute_daily_ingestion(skip_ths: bool = False, skip_hsbc: bool = False) -> 
             summary["hsbc_created_count"] = int(run_hsbc_email_ingestion())
         except Exception as exc:  # pragma: no cover - exercised by API tests
             summary["hsbc_error"] = str(exc)
+
+    if not skip_futu:
+        try:
+            summary["futu_created_count"] = int(run_futu_ingestion())
+        except Exception as exc:  # pragma: no cover - exercised by API tests
+            summary["futu_error"] = str(exc)
 
     return summary
 

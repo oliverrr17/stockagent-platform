@@ -5,6 +5,10 @@ function isHtmlDocument(value: string): boolean {
   return normalized.startsWith("<!doctype html") || normalized.startsWith("<html");
 }
 
+function isAuthTokenRequest(url?: string): boolean {
+  return Boolean(url?.includes("/api/auth/token/"));
+}
+
 function firstErrorValue(value: unknown): string | null {
   if (!value) {
     return null;
@@ -38,6 +42,9 @@ export function getApiErrorMessage(error: unknown, fallback: string): string {
     }
 
     if (error.response?.status === 401) {
+      if (isAuthTokenRequest(error.config?.url)) {
+        return "用户名或密码错误，或当前本地后端没有可用账号。";
+      }
       return "登录状态已失效，请重新登录。";
     }
 

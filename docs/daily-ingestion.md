@@ -4,13 +4,14 @@
 
 - THS A-share ingestion
 - HSBC email ingestion
+- Futu OpenD Hong Kong trade ingestion
 - portfolio market snapshot refresh
 - portfolio news crawl
 - news digest push
 
 ## One-shot run
 
-Run both ingestion paths immediately:
+Run all trade ingestion paths immediately:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File D:\stockagent\scripts\windows\run_daily_ingestion.ps1
@@ -38,6 +39,7 @@ Beat still keeps a standalone `portfolio.tasks.refresh_market_price_snapshots` s
 
 - THS: `16:10`
 - HSBC: `18:30`
+- Futu: `18:35`
 - market snapshots: refreshed inside `run_daily_ingestion_now`
 
 Override them in `.env`:
@@ -47,6 +49,8 @@ THS_FETCH_HOUR=16
 THS_FETCH_MINUTE=10
 HSBC_FETCH_HOUR=18
 HSBC_FETCH_MINUTE=30
+FUTU_FETCH_HOUR=18
+FUTU_FETCH_MINUTE=35
 ```
 
 ## Windows Task Scheduler
@@ -86,3 +90,6 @@ Important:
 - THS GUI automation requires the task to run in an interactive user session.
 - Keep the TongHuaShun client logged in.
 - The task should run with the same effective permission level as the THS client.
+- Futu ingestion requires a running OpenD instance and a configured Hong Kong real account.
+- HSBC and Futu follow the Hong Kong trading calendar.
+- If `TUSHARE_TOKEN` is not configured, Hong Kong holiday handling falls back to weekday approximation.

@@ -24,6 +24,7 @@ env/
 .conda/
 .miniconda3/
 conda-meta/
+miniconda3/
 
 # Runtime data and logs
 db.sqlite3
@@ -48,6 +49,9 @@ frontend/vite.config.d.ts
 # IDE / OS
 .idea/
 .vscode/
+.DS_Store
+.AppleDouble
+.LSOverride
 Thumbs.db
 Desktop.ini
 codex-backup-*/

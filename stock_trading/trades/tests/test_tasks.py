@@ -7,7 +7,7 @@ import pytest
 from django.utils import timezone
 
 from trades.models import TradeRecord
-from trades.tasks import run_hsbc_email_ingestion, run_ths_ingestion
+from trades.tasks import run_futu_ingestion, run_hsbc_email_ingestion, run_ths_ingestion
 
 
 class FakeEmailCrawler:
@@ -217,10 +217,96 @@ def test_run_hsbc_email_ingestion_skips_non_trading_day(monkeypatch):
     monkeypatch.setenv("IMAP_PASSWORD", "secret")
 
     with (
-        patch("trades.tasks.is_cn_equity_trading_day", return_value=False),
+        patch("trades.tasks.is_hk_equity_trading_day", return_value=False),
         patch("trades.tasks.EmailCrawler") as crawler_cls,
     ):
         created_count = run_hsbc_email_ingestion()
 
     assert created_count == 0
     crawler_cls.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_run_hsbc_email_ingestion_uses_hk_trading_day_guard(monkeypatch):
+    monkeypatch.setenv("IMAP_HOST", "imap.example.com")
+    monkeypatch.setenv("IMAP_PORT", "993")
+    monkeypatch.setenv("IMAP_USERNAME", "user@example.com")
+    monkeypatch.setenv("IMAP_PASSWORD", "secret")
+
+    with (
+        patch("trades.tasks.is_hk_equity_trading_day", return_value=False),
+        patch("trades.tasks.EmailCrawler") as crawler_cls,
+    ):
+        created_count = run_hsbc_email_ingestion()
+
+    assert created_count == 0
+    crawler_cls.assert_not_called()
+
+
+class FakeFutuConnector:
+    def __init__(self, config):
+        self.config = config
+
+    def fetch_trade_records(self, start=None, end=None):
+        return [
+            {
+                "stock_code": "00700",
+                "stock_name": "腾讯控股",
+                "market": TradeRecord.Market.HK_STOCK,
+                "direction": TradeRecord.Direction.BUY,
+                "price": Decimal("320.50"),
+                "quantity": 100,
+                "trade_time": timezone.make_aware(datetime(2026, 5, 12, 14, 23, 58), timezone.get_current_timezone()),
+                "source": TradeRecord.Source.FUTU_API,
+                "external_trade_id": "900000000123456789",
+                "commission": Decimal("30.00"),
+                "stamp_duty": Decimal("100.00"),
+                "other_fees": Decimal("27.70"),
+                "fee_details": [{"fee_name": "Commission", "fee_amount": "30.00"}],
+            }
+        ]
+
+
+@pytest.mark.django_db
+def test_run_futu_ingestion_persists_hk_trade(monkeypatch):
+    monkeypatch.setenv("FUTU_HOST", "127.0.0.1")
+    monkeypatch.setenv("FUTU_PORT", "11111")
+    monkeypatch.setenv("FUTU_ACC_ID", "101")
+    monkeypatch.setenv("FUTU_SECURITY_FIRM", "FUTUSECURITIES")
+
+    with (
+        patch("trades.tasks.is_hk_equity_trading_day", return_value=True),
+        patch("trades.tasks.FutuConnector", FakeFutuConnector),
+    ):
+        created_count = run_futu_ingestion()
+
+    assert created_count == 1
+    assert TradeRecord.objects.filter(source=TradeRecord.Source.FUTU_API, stock_code="00700").count() == 1
+
+
+@pytest.mark.django_db
+def test_run_futu_ingestion_skips_non_hk_trading_day(monkeypatch):
+    monkeypatch.setenv("FUTU_HOST", "127.0.0.1")
+    monkeypatch.setenv("FUTU_PORT", "11111")
+    monkeypatch.setenv("FUTU_ACC_ID", "101")
+
+    with (
+        patch("trades.tasks.is_hk_equity_trading_day", return_value=False),
+        patch("trades.tasks.FutuConnector") as connector_cls,
+    ):
+        created_count = run_futu_ingestion()
+
+    assert created_count == 0
+    connector_cls.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_run_futu_ingestion_skips_when_config_missing(monkeypatch):
+    monkeypatch.delenv("FUTU_HOST", raising=False)
+    monkeypatch.delenv("FUTU_PORT", raising=False)
+    monkeypatch.delenv("FUTU_ACC_ID", raising=False)
+
+    with patch("trades.tasks.is_hk_equity_trading_day", return_value=True):
+        created_count = run_futu_ingestion()
+
+    assert created_count == 0

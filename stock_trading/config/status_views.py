@@ -11,6 +11,7 @@ from rest_framework.views import APIView
 
 from .operations import (
     execute_daily_ingestion,
+    execute_futu_ingestion,
     execute_hsbc_ingestion,
     execute_news_crawl,
     execute_push_digest,
@@ -41,6 +42,7 @@ class OperationsStatusView(APIView):
                 "scheduler": {
                     "ths": f"{self._env('THS_FETCH_HOUR', '16')}:{self._env('THS_FETCH_MINUTE', '10').zfill(2)}",
                     "hsbc": f"{self._env('HSBC_FETCH_HOUR', '18')}:{self._env('HSBC_FETCH_MINUTE', '30').zfill(2)}",
+                    "futu": f"{self._env('FUTU_FETCH_HOUR', '18')}:{self._env('FUTU_FETCH_MINUTE', '35').zfill(2)}",
                     "news_fetch": f"{self._env('NEWS_FETCH_HOURS', '8,9,10,11,12,13,14,15,16,17,18,19,20,21,22')}:{self._env('NEWS_FETCH_MINUTE', '0').zfill(2)}",
                     "news_digest": f"{self._env('NEWS_DIGEST_HOUR', '18')}:{self._env('NEWS_DIGEST_MINUTE', '35').zfill(2)}",
                 },
@@ -106,10 +108,13 @@ class OperationsActionView(APIView):
                 result = execute_ths_ingestion()
             elif action == "run-hsbc":
                 result = execute_hsbc_ingestion()
+            elif action == "run-futu":
+                result = execute_futu_ingestion()
             elif action == "run-daily":
                 result = execute_daily_ingestion(
                     skip_ths=bool(payload.get("skip_ths", False)),
                     skip_hsbc=bool(payload.get("skip_hsbc", False)),
+                    skip_futu=bool(payload.get("skip_futu", False)),
                 )
             elif action == "sync-ths-positions":
                 result = execute_sync_ths_positions(

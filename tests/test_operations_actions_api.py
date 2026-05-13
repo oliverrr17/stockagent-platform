@@ -15,12 +15,26 @@ def api_client(db):
 
 @pytest.mark.django_db
 def test_run_daily_action_returns_summary(api_client):
-    with patch("stock_trading.config.status_views.execute_daily_ingestion", return_value={"ths_created_count": 1}):
+    with patch(
+        "stock_trading.config.status_views.execute_daily_ingestion",
+        return_value={"ths_created_count": 1, "futu_created_count": 2},
+    ):
         response = api_client.post("/api/status/actions/run-daily/", {}, format="json")
 
     assert response.status_code == 200
     assert response.json()["action"] == "run-daily"
     assert response.json()["ths_created_count"] == 1
+    assert response.json()["futu_created_count"] == 2
+
+
+@pytest.mark.django_db
+def test_run_futu_action_returns_summary(api_client):
+    with patch("stock_trading.config.status_views.execute_futu_ingestion", return_value={"created_count": 2}):
+        response = api_client.post("/api/status/actions/run-futu/", {}, format="json")
+
+    assert response.status_code == 200
+    assert response.json()["action"] == "run-futu"
+    assert response.json()["created_count"] == 2
 
 
 @pytest.mark.django_db

@@ -20,5 +20,6 @@ dependencies:
       - tushare==1.4.29
       - akshare==1.18.56
       - easytrader==0.23.7
-      - pywin32==311
+      - futu-api
+      - pywin32==311; platform_system == "Windows"
       - beautifulsoup4==4.14.3

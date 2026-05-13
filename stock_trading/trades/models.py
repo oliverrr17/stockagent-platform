@@ -13,6 +13,7 @@ class TradeRecord(models.Model):
     class Source(models.TextChoices):
         THS = "THS", "同花顺"
         HSBC_EMAIL = "HSBC_EMAIL", "汇丰邮件"
+        FUTU_API = "FUTU_API", "富途接口"
         MANUAL = "MANUAL", "手动录入"
 
     stock_code = models.CharField(max_length=20, db_index=True)
@@ -26,6 +27,8 @@ class TradeRecord(models.Model):
     other_fees = models.DecimalField(max_digits=10, decimal_places=4, default=0)
     trade_time = models.DateTimeField(db_index=True)
     source = models.CharField(max_length=12, choices=Source.choices)
+    external_trade_id = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    fee_details = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

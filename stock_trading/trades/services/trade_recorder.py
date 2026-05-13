@@ -20,8 +20,8 @@ class TradeRecorder:
     def record_trade(self, record_data: dict):
         intent_data = record_data.get("intent_snapshot")
         normalized = self._normalize_record_data(record_data)
-        if self.is_duplicate(normalized):
-            existing = TradeRecord.objects.get(**self._unique_lookup(normalized))
+        existing = self._find_existing_trade(normalized)
+        if existing is not None:
             if intent_data:
                 self.sync_intent_snapshot(existing, intent_data)
             return existing, False
@@ -37,7 +37,7 @@ class TradeRecorder:
 
     def is_duplicate(self, record_data: dict) -> bool:
         normalized = self._normalize_record_data(record_data)
-        return TradeRecord.objects.filter(**self._unique_lookup(normalized)).exists()
+        return self._find_existing_trade(normalized) is not None
 
     @staticmethod
     def get_trades(filters: dict):
@@ -60,6 +60,21 @@ class TradeRecorder:
     def _unique_lookup(self, record_data: dict) -> dict:
         return {field: record_data[field] for field in self.UNIQUE_FIELDS}
 
+    def _find_existing_trade(self, record_data: dict):
+        source = str(record_data.get("source", "")).strip()
+        external_trade_id = str(record_data.get("external_trade_id", "")).strip()
+        if source == TradeRecord.Source.FUTU_API and external_trade_id:
+            return (
+                TradeRecord.objects.filter(
+                    source=TradeRecord.Source.FUTU_API,
+                    external_trade_id=external_trade_id,
+                )
+                .order_by("-id")
+                .first()
+            )
+
+        return TradeRecord.objects.filter(**self._unique_lookup(record_data)).order_by("-id").first()
+
     def _normalize_record_data(self, record_data: dict) -> dict:
         normalized = dict(record_data)
         normalized.pop("intent_snapshot", None)
@@ -71,6 +86,8 @@ class TradeRecorder:
         normalized["other_fees"] = self._to_decimal(normalized.get("other_fees", 0))
         normalized["quantity"] = int(normalized["quantity"])
         normalized["trade_time"] = self._to_datetime(normalized["trade_time"])
+        normalized["external_trade_id"] = str(normalized.get("external_trade_id", "")).strip()
+        normalized["fee_details"] = list(normalized.get("fee_details") or [])
         if should_enforce_baseline_for_source(str(normalized.get("source", ""))) and is_trade_before_ingestion_start(normalized):
             raise ValueError(
                 f"Trade time before ingestion baseline date {trade_ingestion_start_date().isoformat()}: "

@@ -48,3 +48,12 @@ def test_operations_status_endpoint_uses_hourly_news_fetch_defaults(api_client):
     assert response.status_code == 200
     payload = response.json()
     assert payload["scheduler"]["news_fetch"] == "8,9,10,11,12,13,14,15,16,17,18,19,20,21,22:00"
+
+
+@pytest.mark.django_db
+def test_operations_status_endpoint_includes_futu_scheduler_defaults(api_client):
+    response = api_client.get("/api/status/operations/")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["scheduler"]["futu"] == "18:35"

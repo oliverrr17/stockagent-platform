@@ -11,11 +11,25 @@ TRADING_DAY_CACHE_TTL_SECONDS = 60 * 60 * 12
 
 
 def is_cn_equity_trading_day(target_date: date | datetime | None = None, token: str | None = None, client=None) -> bool:
+    return _is_equity_trading_day("SSE", "trading-calendar:sse", target_date, token, client)
+
+
+def is_hk_equity_trading_day(target_date: date | datetime | None = None, token: str | None = None, client=None) -> bool:
+    return _is_equity_trading_day("XHKG", "trading-calendar:xhkg", target_date, token, client)
+
+
+def _is_equity_trading_day(
+    exchange: str,
+    cache_prefix: str,
+    target_date: date | datetime | None = None,
+    token: str | None = None,
+    client=None,
+) -> bool:
     trading_date = _normalize_date(target_date)
     if trading_date.weekday() >= 5:
         return False
 
-    cache_key = f"trading-calendar:sse:{trading_date.isoformat()}"
+    cache_key = f"{cache_prefix}:{trading_date.isoformat()}"
     cached = cache.get(cache_key)
     if cached is not None:
         return bool(cached)
@@ -32,7 +46,7 @@ def is_cn_equity_trading_day(target_date: date | datetime | None = None, token: 
     if client is not None:
         try:
             frame = client.trade_cal(
-                exchange="SSE",
+                exchange=exchange,
                 start_date=trading_date.strftime("%Y%m%d"),
                 end_date=trading_date.strftime("%Y%m%d"),
             )

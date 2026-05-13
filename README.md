@@ -119,6 +119,29 @@ The following integrations are optional and only needed for full runtime behavio
 - Tushare token for A-share market data
 - TongHuaShun client and bridge Python for THS ingestion
 - HSBC IMAP credentials for email-based trade ingestion
+- Futu OpenD and `futu-api` for Hong Kong real-account trade ingestion
 - SMTP credentials for email notifications
 
 All of these values are documented in `.env.example`.
+
+### Optional Futu Hong Kong Trade Ingestion
+
+The project can ingest Hong Kong real-account trades from Futu using `OpenD + futu-api`.
+
+Requirements:
+
+- a running OpenD instance
+- a configured Hong Kong real account
+- `FUTU_HOST`, `FUTU_PORT`, and `FUTU_ACC_ID` set in `.env`
+
+Fee handling:
+
+- persisted fee totals are derived from broker-returned `fee_details`
+- `commission`, `stamp_duty`, and `other_fees` are normalized accounting fields
+- raw broker fee details are also persisted for auditability
+
+Important:
+
+- example fee calculations are illustrative only
+- actual commission, platform fees, promotions, and product-type charges vary by account
+- broker-returned `fee_details` is the source of truth for actual persisted costs

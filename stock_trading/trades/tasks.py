@@ -7,9 +7,10 @@ import os
 from celery import shared_task
 from django.utils import timezone
 
-from config.trading_calendar import is_cn_equity_trading_day
+from config.trading_calendar import is_cn_equity_trading_day, is_hk_equity_trading_day
 from trades.ingestion_policy import is_trade_before_ingestion_start
 from trades.services.email_crawler import EmailCrawler
+from trades.services.futu_connector import FutuConnector
 from trades.services.ths_connector import THSConnector
 from trades.services.trade_recorder import TradeRecorder
 
@@ -59,7 +60,7 @@ def fetch_ths_trades() -> int:
 
 def run_hsbc_email_ingestion() -> int:
     today = timezone.localdate()
-    if not is_cn_equity_trading_day(today):
+    if not is_hk_equity_trading_day(today):
         logger.info("Skipping HSBC email fetch on non-trading day %s.", today)
         return 0
 
@@ -107,3 +108,39 @@ def run_hsbc_email_ingestion() -> int:
 @shared_task
 def fetch_hsbc_email_trades() -> int:
     return run_hsbc_email_ingestion()
+
+
+def run_futu_ingestion() -> int:
+    today = timezone.localdate()
+    if not is_hk_equity_trading_day(today):
+        logger.info("Skipping Futu trade fetch on non-trading day %s.", today)
+        return 0
+
+    host = os.getenv("FUTU_HOST", "").strip()
+    port = os.getenv("FUTU_PORT", "").strip()
+    acc_id = os.getenv("FUTU_ACC_ID", "").strip()
+    if not all([host, port, acc_id]):
+        logger.warning("FUTU_HOST, FUTU_PORT and FUTU_ACC_ID must be configured; skipping Futu trade fetch.")
+        return 0
+
+    connector = FutuConnector(
+        {
+            "host": host,
+            "port": int(port),
+            "acc_id": int(acc_id),
+            "security_firm": os.getenv("FUTU_SECURITY_FIRM", "").strip(),
+        }
+    )
+    start_date = today - timedelta(days=1)
+    records = connector.fetch_trade_records(start=start_date, end=today)
+    recorder = TradeRecorder()
+    created_count = 0
+    for record in records:
+        _, created = recorder.record_trade(record)
+        created_count += int(created)
+    return created_count
+
+
+@shared_task
+def fetch_futu_trades() -> int:
+    return run_futu_ingestion()

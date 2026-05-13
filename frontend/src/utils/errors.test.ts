@@ -25,7 +25,7 @@ describe("getApiErrorMessage", () => {
     const error = new axios.AxiosError(
       "Unauthorized",
       "ERR_BAD_REQUEST",
-      undefined,
+      { url: "/api/trades/" } as never,
       undefined,
       {
         data: {},
@@ -37,6 +37,24 @@ describe("getApiErrorMessage", () => {
     );
 
     expect(getApiErrorMessage(error, "fallback")).toBe("登录状态已失效，请重新登录。");
+  });
+
+  it("returns credential message for token endpoint 401", () => {
+    const error = new axios.AxiosError(
+      "Unauthorized",
+      "ERR_BAD_REQUEST",
+      { url: "/api/auth/token/" } as never,
+      undefined,
+      {
+        data: {},
+        status: 401,
+        statusText: "Unauthorized",
+        headers: {},
+        config: {} as never,
+      },
+    );
+
+    expect(getApiErrorMessage(error, "fallback")).toBe("用户名或密码错误，或当前本地后端没有可用账号。");
   });
 
   it("falls back when backend returns an HTML error page", () => {

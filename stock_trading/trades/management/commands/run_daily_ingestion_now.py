@@ -6,15 +6,16 @@ import sys
 from django.core.management.base import BaseCommand
 
 from portfolio.tasks import refresh_market_price_snapshots
-from trades.tasks import run_hsbc_email_ingestion, run_ths_ingestion
+from trades.tasks import run_futu_ingestion, run_hsbc_email_ingestion, run_ths_ingestion
 
 
 class Command(BaseCommand):
-    help = "Run the daily THS and HSBC ingestion flow immediately."
+    help = "Run the daily THS, HSBC, and Futu ingestion flow immediately."
 
     def add_arguments(self, parser):
         parser.add_argument("--skip-ths", action="store_true", help="Skip THS ingestion.")
         parser.add_argument("--skip-hsbc", action="store_true", help="Skip HSBC email ingestion.")
+        parser.add_argument("--skip-futu", action="store_true", help="Skip Futu ingestion.")
         parser.add_argument("--json", action="store_true", help="Print the summary as JSON.")
         parser.add_argument("--ths-bridge-python", default="", help="Override THS bridge python path.")
         parser.add_argument("--ths-window-title-keyword", default="", help="Override THS window title keyword.")
@@ -44,6 +45,11 @@ class Command(BaseCommand):
                 summary["hsbc_created_count"] = int(run_hsbc_email_ingestion())
             except Exception as exc:
                 errors["hsbc_error"] = str(exc)
+        if not options["skip_futu"]:
+            try:
+                summary["futu_created_count"] = int(run_futu_ingestion())
+            except Exception as exc:
+                errors["futu_error"] = str(exc)
         try:
             summary["market_snapshot"] = refresh_market_price_snapshots()
         except Exception as exc:
@@ -58,6 +64,8 @@ class Command(BaseCommand):
             parts.append(f"THS created {summary['ths_created_count']} trade(s)")
         if "hsbc_created_count" in summary:
             parts.append(f"HSBC created {summary['hsbc_created_count']} trade(s)")
+        if "futu_created_count" in summary:
+            parts.append(f"FUTU created {summary['futu_created_count']} trade(s)")
         if "market_snapshot" in summary:
             snapshot_summary = summary["market_snapshot"]
             if snapshot_summary.get("skipped"):
@@ -70,6 +78,8 @@ class Command(BaseCommand):
             parts.append(f"THS error: {errors['ths_error']}")
         if "hsbc_error" in errors:
             parts.append(f"HSBC error: {errors['hsbc_error']}")
+        if "futu_error" in errors:
+            parts.append(f"FUTU error: {errors['futu_error']}")
         if "market_snapshot_error" in errors:
             parts.append(f"Market snapshot error: {errors['market_snapshot_error']}")
         if errors:
